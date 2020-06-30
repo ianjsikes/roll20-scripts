@@ -1,24 +1,28 @@
-class _Lighter extends ScriptBase({
-  name: 'Lighter',
-  version: '0.2.0',
-  stateKey: 'LIGHTER',
+class _Tokenporter extends ScriptBase({
+  name: 'Tokenporter',
+  version: '0.1.0',
+  stateKey: 'TOKENPORTER',
   initialState: {
-    carriers: {},
+    portals: {},
   },
 }) {
   constructor() {
     super();
 
-    if (!TC) {
-      throw new Error('TokenCache must be installed!');
+    if (!TokenCollisions) {
+      throw new Error('You must have the TokenCollisions script installed!');
     }
 
-    on('destroy:graphic', this.handleTokenDelete);
+    if (!TC) {
+      throw new Error('You must have the TokenCache script installed!');
+    }
+
+    on('change:graphic', this.handleTokenChange);
     on('ready', () => {
       this.createPlayerMacros();
     });
 
-    this.parser = new CommandParser('!lighter')
+    this.parser = new CommandParser('!tokenporter')
       .default((opts, msg) => {
         log('Showing menu to ' + msg.who);
         this.showMenu(msg.who, msg.playerid);
@@ -33,6 +37,49 @@ class _Lighter extends ScriptBase({
       });
   }
 
+  _changed = (props, obj, prev) => {
+    return props.some((prop) => obj.get(prop) !== prev[prop]);
+  };
+
+  handleTokenChange = (obj, prev) => {
+    if (
+      obj.get('layer') === 'objects' &&
+      this._changed(['left', 'top', 'width', 'height', 'layer'], obj, prev)
+    ) {
+      this.checkPortalCollisions(obj);
+    }
+  };
+
+  checkPortalCollisions = (tok) => {};
+
+  createPortal = (opts, msg) => {
+    let portalId = opts.portalId;
+    let targetId = opts.target || msg.selected;
+    targetId = Array.isArray(targetId) ? targetId[0]._id : targetId;
+    let target = TC[targetId];
+
+    if (!target) {
+      throw new Error(
+        'You must provide a target with the --target=TARGET_ID option or by selecting a token.'
+      );
+    }
+    if (!portalId) {
+      throw new Error(
+        'You must provide a portal ID with the --portalId=PORTAL_ID option.'
+      );
+    }
+
+    if (!this.state.portals[portalId]) {
+      this.state.portals[portalId] = 
+    }
+
+    target.set({
+      aura1_radius: 0,
+      aura1_color: '#00ffff',
+      aura1_square: true,
+    });
+  };
+
   light = (opts, msg) => {
     log("Running 'light' command");
     let type = opts.type || 'torch';
@@ -41,10 +88,10 @@ class _Lighter extends ScriptBase({
     log(`type: ${type}, target: ${target}`);
 
     // If selected token is an unlit light source, just re-light it.
-    let targetToken = TC[target];
+    let targetToken = getObj('graphic', target);
     if (this.isLightToken(targetToken) && !this.isLit(targetToken)) {
       log('target is light, relighting it');
-      this.toggleLightSource(targetToken);
+      this.toggleLightSource(getObj('graphic', target));
       return;
     }
 
@@ -52,18 +99,18 @@ class _Lighter extends ScriptBase({
     if (target in this.state.carriers) {
       log('target is carrier');
       const carrierState = this.state.carriers[target];
-      const carriedToken = TC[carrierState.carrying];
+      const carriedToken = getObj('graphic', carrierState.carrying);
 
       if (this.isLightToken(carriedToken) && !this.isLit(carriedToken)) {
         log('relighting carried light');
-        this.toggleLightSource(carriedToken);
+        this.toggleLightSource(getObj('graphic', carrierState.carrying));
       }
       return;
     }
 
     log('creating light source token');
     const light = this.LIGHTS[type] || this.LIGHTS.torch;
-    const carrier = TC[target];
+    const carrier = getObj('graphic', target);
     const lightToken = createObj('graphic', {
       _subtype: 'token',
       _pageid: carrier.get('_pageid'),
@@ -98,8 +145,11 @@ class _Lighter extends ScriptBase({
 
     if (target in this.state.carriers) {
       log('target is carrier, dropping torch');
-      const carrier = TC[target];
-      const lightToken = TC[this.state.carriers[target].carrying];
+      const carrier = getObj('graphic', target);
+      const lightToken = getObj(
+        'graphic',
+        this.state.carriers[target].carrying
+      );
 
       CarryTokens.drop(carrier, lightToken);
       lightToken.set({
@@ -117,10 +167,10 @@ class _Lighter extends ScriptBase({
     log(`target ${target}`);
 
     // If selected token is a lit light source, snuff it.
-    let targetToken = TC[target];
+    let targetToken = getObj('graphic', target);
     if (this.isLightToken(targetToken) && this.isLit(targetToken)) {
       log('target is light, snuffing it');
-      this.toggleLightSource(targetToken);
+      this.toggleLightSource(getObj('graphic', target));
       return;
     }
 
@@ -128,10 +178,10 @@ class _Lighter extends ScriptBase({
     if (target in this.state.carriers) {
       log('target is carrier');
       const carrierState = this.state.carriers[target];
-      const carriedToken = TC[carrierState.carrying];
+      const carriedToken = getObj('graphic', carrierState.carrying);
       if (this.isLightToken(carriedToken) && this.isLit(carriedToken)) {
         log('snuffing carried light');
-        this.toggleLightSource(carriedToken);
+        this.toggleLightSource(getObj('graphic', carrierState.carrying));
       }
       return;
     }
@@ -146,8 +196,8 @@ class _Lighter extends ScriptBase({
 
     if (!carrierId || !lightId) return;
 
-    const carrier = TC[carrierId];
-    const lightToken = TC[lightId];
+    const carrier = getObj('graphic', carrierId);
+    const lightToken = getObj('graphic', lightId);
 
     if (!this.isLightToken(lightToken)) return;
     if (carrierId in this.state.carriers) return;
@@ -331,4 +381,4 @@ class _Lighter extends ScriptBase({
   };
 }
 
-const Lighter = new _Lighter();
+const Tokenporter = new _Tokenporter();

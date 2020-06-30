@@ -1,6 +1,10 @@
 class _Slo {
   version = '0.2.1';
 
+  randomId = () =>
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
+
   who = (name) => name.replace(/\(GM\)/, '').trim();
 
   whisper = (from, to, msg) => sendChat(from, `/w "${this.who(to)}" ${msg}`);
@@ -28,11 +32,41 @@ class _Slo {
 }
 const Slo = new _Slo();
 
+const _tcache = {};
+const TC = new Proxy(_tcache, {
+  get: (obj, tokenId) => {
+    if (tokenId in obj) return obj[tokenId];
+
+    let token = getObj('graphic', tokenId);
+    if (token) {
+      obj[tokenId] = token;
+    }
+    return token;
+  },
+});
+
+const _ccache = {};
+const CC = new Proxy(_ccache, {
+  get: (obj, characterId) => {
+    if (characterId in obj) return obj[characterId];
+
+    let character = getObj('character', characterId);
+    if (character) {
+      obj[characterId] = character;
+    }
+    return character;
+  },
+});
+
 class CommandParser {
-  constructor(trigger) {
+  constructor(trigger, ...aliases) {
     this.trigger = trigger;
+    this.aliases = aliases || [];
     this.defaultCmd;
     this.subCmds = {};
+    this.buttonActions = {
+      __ungrouped: {},
+    };
   }
 
   default(action) {
@@ -45,11 +79,42 @@ class CommandParser {
     return this;
   }
 
+  button({ action, group = '__ungrouped' }) {
+    if (!this.buttonActions[group]) {
+      this.buttonActions[group] = {};
+    }
+    let id = Slo.randomId();
+    this.buttonActions[group][id] = action;
+    return `${this.trigger} _btn_${id}`;
+  }
+
   handleMessage(msg) {
     if (msg.type !== 'api') return;
     let content = msg.content.trim();
-    if (!content.startsWith(this.trigger)) return;
-    let [_trigger, subCommand, ...args] = content.split(' ');
+    let [trigger, subCommand, ...args] = content.split(' ');
+
+    if (trigger !== this.trigger) {
+      if (!this.aliases.length || !this.aliases.includes(trigger)) {
+        return;
+      }
+    }
+
+    if (subCommand && subCommand.startsWith('_btn_')) {
+      let btnId = subCommand.replace('_btn_', '');
+      for (const group in this.buttonActions) {
+        if (btnId in this.buttonActions[group]) {
+          this.buttonActions[group][btnId]();
+          if (group !== '__ungrouped') {
+            delete this.buttonActions[group];
+          } else {
+            delete group[btnId];
+          }
+          return;
+        }
+      }
+      throw new Error(`Hey, that button is expired!`);
+    }
+
     if (
       !subCommand ||
       subCommand.startsWith('--') ||
@@ -65,9 +130,14 @@ class CommandParser {
       if (subCommand in this.subCmds) {
         const opts = this.parseArgs(args);
         this.subCmds[subCommand].action(opts, msg);
-      } else {
-        this.showHelp();
+        return;
       }
+
+      for (const group of this.buttonActions) {
+        if (subCommand in group) {
+        }
+      }
+      this.showHelp();
     }
   }
 
@@ -99,9 +169,10 @@ const ScriptBase = ({ name, version, stateKey = name, initialState = {} }) =>
     name = name;
 
     get state() {
-      if (!state) {
+      if (!state[stateKey]) {
         state[stateKey] = initialState;
       }
+      return state[stateKey];
     }
 
     onMessage = (msg) => {
@@ -130,15 +201,19 @@ const ScriptBase = ({ name, version, stateKey = name, initialState = {} }) =>
   };
 
 class _SloCmds extends ScriptBase({ name: 'SLO', version: '0.2.0' }) {
-  parser = new CommandParser('!slo')
-    .default(() => {
-      log(
-        'Please use one of the following sub-commands: roll-hp, eldritch-cannon, spiritual-weapon'
-      );
-    })
-    .command('roll-hp', this.rollHP)
-    .command('eldritch-cannon', this.eldritchCannon)
-    .command('spiritual-weapon', this.spiritualWeapon);
+  constructor() {
+    super();
+
+    this.parser = new CommandParser('!slo')
+      .default(() => {
+        log(
+          'Please use one of the following sub-commands: roll-hp, eldritch-cannon, spiritual-weapon'
+        );
+      })
+      .command('roll-hp', this.rollHP)
+      .command('eldritch-cannon', this.eldritchCannon)
+      .command('spiritual-weapon', this.spiritualWeapon);
+  }
 
   rollHP = async (opts, msg) => {
     if (!msg.selected || !msg.selected.length) {
@@ -309,9 +384,9 @@ class _SloCmds extends ScriptBase({ name: 'SLO', version: '0.2.0' }) {
 
     let action = `&{template:atkdmg} {{mod=${attr(
       'spell_attack_bonus'
-    )}}} {{rname=Spiritual Weapon Attack}} {{r1=${atk}}} {{always=1}} {{r2=${atk}}} {{attack=1}} {{range=5 ft.}} {{damage=1}} {{dmg1flag=1}} {{dmg1=[[${damage}+${attr(
+    )}}} {{rname=Spiritual Weapon Attack}} {{r1=${atk}}} {{always=1}} {{r2=${atk}}} {{attack=1}} {{range=5 ft.}} {{damage=1}} {{dmg1flag=1}} {{dmg1=[[${attr(
       'spellcasting_ability'
-    )}]]}} {{dmg1type=force}} {{crit=1}} {{crit1=${
+    )}${damage}]]}} {{dmg1type=force}} {{crit=1}} {{crit1=${
       numDice * 8
     }}} {{charname=${charName}}}`;
     if (attackAbility) {
