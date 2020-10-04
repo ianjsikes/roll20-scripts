@@ -1,3 +1,219 @@
+/**
+ * SLO_UTILS
+ * Copied from SloUtils.js
+ */
+class _Slo {
+  version = '0.2.1';
+
+  randomId = () =>
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
+
+  who = (name) => name.replace(/\(GM\)/, '').trim();
+
+  whisper = (from, to, msg) => sendChat(from, `/w "${this.who(to)}" ${msg}`);
+
+  sendChatAsync = (from, msg, opts) =>
+    new Promise((resolve, reject) => {
+      try {
+        sendChat(from, msg, (results) => resolve(results), opts);
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+  roll = async (rollFormula) => {
+    const [rollResultMsg] = await this.sendChatAsync('', `/r ${rollFormula}`);
+    if (rollResultMsg.type !== 'rollresult') {
+      throw new Error(`Roll failed: ${rollFormula}`);
+    }
+    const rollResult = JSON.parse(rollResultMsg.content);
+    return rollResult.total;
+  };
+
+  rollData = async (rollFormula) => {
+    const [rollResultMsg] = await this.sendChatAsync('', `/r ${rollFormula}`);
+    if (rollResultMsg.type !== 'rollresult') {
+      throw new Error(`Roll failed: ${rollFormula}`);
+    }
+    const rollResult = JSON.parse(rollResultMsg.content);
+    return rollResult;
+  };
+
+  getTokens = (ids) =>
+    (ids || []).map(({ _type, _id }) => getObj(_type, _id)).filter((o) => !!o);
+}
+const Slo = new _Slo();
+
+const _tcache = {};
+const TC = new Proxy(_tcache, {
+  get: (obj, tokenId) => {
+    if (tokenId in obj) return obj[tokenId];
+
+    let token = getObj('graphic', tokenId);
+    if (token) {
+      obj[tokenId] = token;
+    }
+    return token;
+  },
+});
+
+const _ccache = {};
+const CC = new Proxy(_ccache, {
+  get: (obj, characterId) => {
+    if (characterId in obj) return obj[characterId];
+
+    let character = getObj('character', characterId);
+    if (character) {
+      obj[characterId] = character;
+    }
+    return character;
+  },
+});
+
+class CommandParser {
+  constructor(trigger, ...aliases) {
+    this.trigger = trigger;
+    this.aliases = aliases || [];
+    this.defaultCmd;
+    this.subCmds = {};
+    this.buttonActions = {
+      __ungrouped: {},
+    };
+  }
+
+  default(action) {
+    this.defaultCmd = { action };
+    return this;
+  }
+
+  command(name, action) {
+    this.subCmds[name] = { action };
+    return this;
+  }
+
+  button({ action, group = '__ungrouped' }) {
+    if (!this.buttonActions[group]) {
+      this.buttonActions[group] = {};
+    }
+    let id = Slo.randomId();
+    this.buttonActions[group][id] = action;
+    return `${this.trigger} _btn_${id}`;
+  }
+
+  async handleMessage(msg) {
+    if (msg.type !== 'api') return;
+    let content = msg.content.trim();
+    let [trigger, subCommand, ...args] = content.split(' ');
+
+    if (trigger !== this.trigger) {
+      if (!this.aliases.length || !this.aliases.includes(trigger)) {
+        return;
+      }
+    }
+
+    if (subCommand && subCommand.startsWith('_btn_')) {
+      let btnId = subCommand.replace('_btn_', '');
+      for (const group in this.buttonActions) {
+        if (btnId in this.buttonActions[group]) {
+          let action = this.buttonActions[group][btnId];
+          if (group !== '__ungrouped') {
+            delete this.buttonActions[group];
+          } else {
+            delete group[btnId];
+          }
+          await action();
+          return;
+        }
+      }
+      throw new Error(`Hey, that button is expired!`);
+    }
+
+    if (
+      !subCommand ||
+      subCommand.startsWith('--') ||
+      !(subCommand in this.subCmds)
+    ) {
+      if (this.defaultCmd) {
+        const opts = this.parseArgs([subCommand, ...args]);
+        await this.defaultCmd.action(opts, msg);
+      } else {
+        this.showHelp();
+      }
+    } else {
+      if (subCommand in this.subCmds) {
+        const opts = this.parseArgs(args);
+        await this.subCmds[subCommand].action(opts, msg);
+        return;
+      }
+      this.showHelp();
+    }
+  }
+
+  parseArgs(args) {
+    let options = args.reduce(
+      (opts, arg) => {
+        if (!arg) return opts;
+        if (arg.startsWith('--')) {
+          let [key, val] = arg.slice(2).split('=');
+          return { ...opts, [key]: val === undefined ? true : val };
+        }
+        return {
+          ...opts,
+          _: [...opts._, arg],
+        };
+      },
+      { _: [] }
+    );
+
+    return options;
+  }
+
+  showHelp() {}
+}
+
+const ScriptBase = ({ name, version, stateKey = name, initialState = {} }) =>
+  class {
+    version = version;
+    name = name;
+
+    get state() {
+      if (!state[stateKey]) {
+        state[stateKey] = initialState;
+      }
+      return state[stateKey];
+    }
+
+    onMessage = async (msg) => {
+      if (!this.parser) return;
+      try {
+        await this.parser.handleMessage(msg);
+      } catch (err) {
+        log(`${name} ERROR: ${err.message}`);
+        sendChat(
+          `${name} ERROR:`,
+          `/w ${msg.who.replace(/\(GM\)/, '').trim()} ${err.message}`
+        );
+      }
+    };
+
+    constructor() {
+      on('chat:message', this.onMessage);
+      on('ready', () => {
+        log(`\n[====== ${name} v${version} ======]`);
+      });
+    }
+
+    resetState(newState = initialState) {
+      state[stateKey] = newState;
+    }
+  };
+
+/**
+ * FRIEND_COMPUTER
+ * Copied from FriendComputer.js
+ */
+
 const SKILLS = [
   'athletics',
   'guns',
