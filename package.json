@@ -1,0 +1,39 @@
+{
+  "name": "roll20-scripts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "FriendComputer.js",
+  "scripts": {
+    "build": "webpack",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ianjsikes/roll20-scripts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ianjsikes/roll20-scripts/issues"
+  },
+  "homepage": "https://github.com/ianjsikes/roll20-scripts#readme",
+  "devDependencies": {
+    "@babel/core": "^7.11.6",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.10.4",
+    "@babel/plugin-proposal-optional-chaining": "^7.11.0",
+    "@babel/plugin-syntax-class-properties": "^7.10.4",
+    "@babel/preset-env": "^7.11.5",
+    "@types/webpack": "^4.41.22",
+    "babel-loader": "^8.1.0",
+    "webpack": "^4.44.2",
+    "webpack-cli": "^3.3.12"
+  },
+  "prettier": {
+    "semi": false,
+    "arrowParens": "always",
+    "printWidth": 120,
+    "singleQuote": true,
+    "trailingComma": "es5"
+  }
+}
