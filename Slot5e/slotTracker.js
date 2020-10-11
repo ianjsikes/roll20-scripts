@@ -61,10 +61,14 @@ export class SlotTracker {
     this.char = char
     this.charName = getObj('character', char.id)?.get('name')
 
-    const resources = new CharResources(char.id)
-    this.slotRes = resources.getOrCreateByName(SLOT_RESOURCE_NAME)
+    this.resources = new CharResources(char.id)
+    this.slotRes = this.resources.getOrCreateByName(SLOT_RESOURCE_NAME)
     if (this.slotRes.curr === '') this.slotRes.curr = '0'
     if (this.slotRes.max === '') this.slotRes.max = '0'
+  }
+
+  get isContainer() {
+    return this.char.size === 'Container'
   }
 
   update() {
@@ -102,6 +106,7 @@ export class SlotTracker {
   setEncumbered() {
     let token = this.char.findToken()
     if (!token) return
+    CombatMaster.addConditionToToken(token, 'encumbered')
     // TODO: Make Encumbered marker configurable
     let changed = addStatus(token, 'Encumbered', StatusType.CUSTOM)
     changed = changed || token.get('tint_color') !== 'transparent'
@@ -124,11 +129,31 @@ export class SlotTracker {
   }
 
   maxSlots() {
+    if (this.isContainer) {
+      return parseInt(this.char.class_resource)
+    }
+
+    let size = (this.char.size || 'Medium').toLowerCase()
     let strMod = parseInt(this.char.strength_mod)
     let conMod = parseInt(this.char.constitution_mod)
     let mod = Math.max(strMod, conMod)
 
     if (isNaN(mod)) throw new Error(`Invalid str/con modifier for character ${this.char.id}`)
+
+    switch (size) {
+      case 'tiny':
+        return 6 + mod
+      case 'small':
+        return 14 + mod
+      case 'medium':
+        return 18 + mod
+      case 'large':
+        return 22 + mod * 2
+      case 'huge':
+        return 30 + mod * 4
+      case 'gargantuan':
+        return 46 + mod * 8
+    }
 
     return 18 + mod
   }
@@ -152,8 +177,10 @@ export class SlotTracker {
       return isNaN(val) ? sum : sum + val
     }, 0)
 
-    // Take into account the 100 "free" coins
-    numCoins = Math.max(0, numCoins - 100)
+    if (!this.isContainer) {
+      // Take into account the 100 "free" coins
+      numCoins = Math.max(0, numCoins - 100)
+    }
     let bulk = Math.ceil(numCoins / 100)
     return bulk
   }

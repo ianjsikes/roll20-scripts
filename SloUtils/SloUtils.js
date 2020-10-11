@@ -116,6 +116,11 @@ class CommandParser {
     return this
   }
 
+  /**
+   *
+   * @param {string} name
+   * @param {(opts: {}, msg: {}) => void} action
+   */
   command(name, action) {
     this.subCmds[name] = { action }
     return this

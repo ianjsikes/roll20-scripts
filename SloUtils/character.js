@@ -157,6 +157,65 @@ export class Character {
     })
     return [...repeatingRows]
   }
+
+  get character() {
+    if (!this._character) this._character = getObj('character', this.id)
+    return this._character
+  }
+
+  get name() {
+    return this.character.get('name')
+  }
+  set name(val) {
+    this.character.setWithWorker('name', val)
+  }
+
+  get avatar() {
+    return this.character.get('avatar')
+  }
+  set avatar(val) {
+    this.character.setWithWorker('avatar', val)
+  }
+
+  get archived() {
+    return this.character.get('archived')
+  }
+  set archived(val) {
+    this.character.setWithWorker('archived', val)
+  }
+
+  get inPlayerJournals() {
+    return (this.character.get('inplayerjournals') || '').split(',')
+  }
+  set inPlayerJournals(val) {
+    this.character.setWithWorker('inplayerjournals', val.join())
+  }
+
+  get controlledBy() {
+    return (this.character.get('controlledby') || '').split(',')
+  }
+  set controlledBy(val) {
+    this.character.setWithWorker('controlledby', val.join())
+  }
+
+  async getBio() {
+    return new Promise((resolve) => this.character.get('bio', resolve))
+  }
+  setBio(bio) {
+    this.character.setWithWorker('bio', bio)
+  }
+
+  async getGmNotes() {
+    return new Promise((resolve) => this.character.get('gmnotes', resolve))
+  }
+  setGmNotes(gmNotes) {
+    this.character.setWithWorker('gmnotes', gmNotes)
+  }
+
+  async getDefaultToken() {
+    return new Promise((resolve) => this.character.get('_defaulttoken', resolve))
+  }
+
   static attrHandler = {
     get: (obj, prop) => {
       switch (prop) {

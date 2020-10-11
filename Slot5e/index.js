@@ -34,14 +34,30 @@ class _Slot5e extends ScriptBase({
       }
     })
 
-    this.parser = new CommandParser('!slot5e').default(() => {
-      let names = []
-      for (const id in this.trackers) {
-        this.trackers[id].update()
-        names.push(this.trackers[id].charName)
-      }
-      sendChat(this.name, `Manually updated slots for ${names.join(', ')}`)
-    })
+    this.parser = new CommandParser('!slot5e')
+      .default(() => {
+        let names = []
+        for (const id in this.trackers) {
+          this.trackers[id].update()
+          names.push(this.trackers[id].charName)
+        }
+        sendChat(this.name, `Manually updated slots for ${names.join(', ')}`)
+      })
+      .command('container', (opts, msg) => {
+        const name = opts._.join(' ') || 'Container'
+        const containerChar = createObj('character', {
+          name,
+          inplayerjournals: 'all',
+          controlledby: 'all',
+        })
+        const container = Character.fromId(containerChar.id)
+        container.size = 'Container'
+        container.npc = '0'
+        container.class_resource_name = 'Capacity'
+        container.class_resource = opts.slots
+        container.mancer_cancel = 'on'
+        sendChat(this.name, `Created container "${name}"`)
+      })
   }
 
   getTrackerForId(id) {

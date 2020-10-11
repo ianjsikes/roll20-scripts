@@ -1,11 +1,10 @@
 export const StatusType = { DEFAULT: 'DEFAULT', CUSTOM: 'CUSTOM' }
 
+const getTag = (status, statusType) =>
+  statusType === StatusType.DEFAULT ? status : libTokenMarkers.getStatus(status).getTag()
+
 export const removeStatus = (token, status, statusType = StatusType.DEFAULT) => {
-  let tag = status
-  if (statusType === StatusType.CUSTOM) {
-    // TODO: Remove hard dependency on libTokenMarkers
-    tag = libTokenMarkers.getStatus(status).getTag()
-  }
+  let tag = getTag(status, statusType)
 
   let statuses = token.get('statusmarkers').split(',')
   let oldStatusLength = statuses.length
@@ -14,11 +13,14 @@ export const removeStatus = (token, status, statusType = StatusType.DEFAULT) => 
   return statuses.length < oldStatusLength
 }
 
+export const hasStatus = (token, status, statusType = StatusType.DEFAULT) => {
+  let tag = getTag(status, statusType)
+  let statuses = token.get('statusmarkers').split(',')
+  return statuses.indexOf(tag) !== -1
+}
+
 export const addStatus = (token, status, statusType = StatusType.DEFAULT) => {
-  let tag = status
-  if (statusType === StatusType.CUSTOM) {
-    tag = libTokenMarkers.getStatus(status).getTag()
-  }
+  let tag = getTag(status, statusType)
 
   let statuses = token.get('statusmarkers').split(',')
   if (statuses.indexOf(tag) !== -1) return false

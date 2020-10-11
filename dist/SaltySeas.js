@@ -81,7 +81,7 @@
 /******/
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 2);
+/******/ 	return __webpack_require__(__webpack_require__.s = 1);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -698,356 +698,34 @@ const addStatus = (token, status, statusType = StatusType.DEFAULT) => {
  // export const getTokens = (ids) => (ids || []).map(({ _type, _id }) => getObj(_type, _id)).filter((o) => !!o)
 
 /***/ }),
-/* 1 */,
-/* 2 */
+/* 1 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-// ESM COMPAT FLAG
 __webpack_require__.r(__webpack_exports__);
-
-// EXTERNAL MODULE: ./SloUtils/index.js + 7 modules
-var SloUtils = __webpack_require__(0);
-
-// CONCATENATED MODULE: ./Slot5e/charResources.js
-
-
-class Resource {
-  constructor(side, nameAttr, valAttr) {
-    this.side = side;
-    this.nameAttr = nameAttr;
-    this.valAttr = valAttr;
-  }
-
-  get name() {
-    return this.nameAttr.get('current');
-  }
-
-  set name(n) {
-    this.nameAttr.setWithWorker({
-      current: n
-    });
-  }
-
-  get curr() {
-    return this.valAttr.get('current');
-  }
-
-  set curr(c) {
-    this.valAttr.set({
-      current: c
-    });
-  }
-
-  get max() {
-    return this.valAttr.get('max');
-  }
-
-  set max(m) {
-    this.valAttr.set({
-      max: m
-    });
-  }
-
-}
-
-class charResources_CharResources {
-  constructor(id) {
-    this.id = id;
-    this.resourceAttrsByRow = {};
-    this.rows = [];
-    let resourceRegex = new RegExp('repeating_resource_([^_]*)_resource_(left|right)(_name)?');
-    findObjs({
-      characterid: id,
-      type: 'attribute'
-    }).forEach(attr => {
-      var match = attr.get('name').match(resourceRegex);
-
-      if (match) {
-        const [name, row, side, isNameAttr] = match;
-
-        if (!(row in this.resourceAttrsByRow)) {
-          this.resourceAttrsByRow[row] = {};
-        }
-
-        if (!(side in this.resourceAttrsByRow[row])) {
-          this.resourceAttrsByRow[row][side] = {};
-        }
-
-        if (isNameAttr) {
-          this.resourceAttrsByRow[row][side].nameAttr = attr;
-        } else {
-          this.resourceAttrsByRow[row][side].valAttr = attr;
-        }
-      }
-    });
-
-    for (const rowId in this.resourceAttrsByRow) {
-      const row = this.resourceAttrsByRow[rowId];
-      let resVals = [];
-
-      if (row.left && row.left.nameAttr && row.left.valAttr) {
-        resVals.push(new Resource('left', row.left.nameAttr, row.left.valAttr));
-      }
-
-      if (row.right && row.right.nameAttr && row.right.valAttr) {
-        resVals.push(new Resource('right', row.right.nameAttr, row.right.valAttr));
-      }
-
-      this.rows.push(resVals);
-    }
-  }
-
-  addRow(left = null, right = null) {
-    let rowId = Object(SloUtils["e" /* generateRowID */])();
-
-    const makeAttr = (suffix, curr, max) => {
-      const attr = createObj('attribute', {
-        characterid: this.id,
-        name: `${prefix}${suffix}`,
-        current: ''
-      });
-      if (curr) attr.setWithWorker({
-        current: curr
-      });
-      if (max) attr.setWithWorker({
-        max
-      });
-      return attr;
-    };
-
-    this.resourceAttrsByRow[rowId] = {};
-    let prefix = `repeating_resource_${rowId}_resource_`;
-    const leftNameAttr = makeAttr('left_name', left && left.name);
-    const leftValAttr = makeAttr('left', left && left.curr, left && left.max);
-    this.resourceAttrsByRow[rowId].left = {
-      nameAttr: leftNameAttr,
-      valAttr: leftValAttr
-    };
-    const leftRes = new Resource('left', leftNameAttr, leftValAttr);
-    const rightNameAttr = makeAttr('right_name', right && right.name);
-    const rightValAttr = makeAttr('right', right && right.curr, right && right.max);
-    this.resourceAttrsByRow[rowId].right = {
-      nameAttr: rightNameAttr,
-      valAttr: rightValAttr
-    };
-    const rightRes = new Resource('right', rightNameAttr, rightValAttr);
-    this.rows.push([leftRes, rightRes]);
-    return [leftRes, rightRes];
-  }
-
-  getOrCreateByName(name) {
-    for (const row of this.rows) {
-      for (const res of row) {
-        if (res.name.startsWith(name)) return res;
-      }
-    }
-
-    const [left] = this.addRow({
-      name
-    });
-    return left;
-  }
-
-}
-// CONCATENATED MODULE: ./Slot5e/slotTracker.js
-
-
-const SLOT_RESOURCE_NAME = 'Slots';
-
-const buildStatusMessage = (title, body, color = '#000') => {
-  return `<div style="background-color: #fff ; border: 1px solid ${color} ; padding: 5px ; border-radius: 5px ; overflow: hidden">` + `<div style="font-size: 14px ; font-weight: bold ; background-color: ${color}; padding: 3px ; border-top-left-radius: 3px ; border-top-right-radius: 3px">` + `<span style="color: white">` + `<div style="width: 1.7em ; vertical-align: middle ; height: 1.7em ; display: inline-block ; margin: 0 3px 0 0 ; border: 0 ; padding: 0 ; background-image: url(&quot;https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495&quot;) ; background-repeat: no-repeat ; background-size: auto 1.7em"></div>` + `${title}` + `</span>` + `</div>` + `${body}` + `</div>`;
-};
-
-const ENCUMBERED_MSG = name => buildStatusMessage(`${name} is Encumbered`, `<ul>` + `<li>Your speed is halved</li>` + `<li>You have disadvantage on ability checks, attack rolls, and saving throws that use Strength, Dexterity, or Constitution</li>` + `</ul>`, `#c27913`);
-
-const OVERLOADED_MSG = name => buildStatusMessage(`${name} is Overloaded`, `You are carrying too much! You cannot do anything until you drop some items.`, `#c22513`);
-
-const UNENCUMBERED_MSG = name => buildStatusMessage(`${name} is no longer Encumbered`, ``, `#13c24d`);
-
-const parseItem = item => {
-  const name = item.itemname; // item.itemproperties - The "Prop" field - ""
-  // item.itemcontent
-  // item.itemmodifiers = The "Mod" field - ""
-  // item.hasattack - If the item has a corresponding attack - 0 | 1
-  // item.useasresource - If the item has a corresponding resource - 0 | 1
-  // item.itemattackid - The item's corresponding attack ID - ""
-  // item.inventorysubflag - Whether the submenu is opened or closed - "0" | "1"
-  // item.equipped - If the item is equipped or not - "0" | "1"
-  // item.itemresourceid - The item's corresponding resource ID - ""
-
-  let bulk = !!item.itemweight ? parseFloat(item.itemweight) : 0;
-  if (isNaN(bulk)) bulk = 0;
-  let count = !!item.itemcount ? parseInt(item.itemcount) : 1;
-  if (isNaN(count)) count = 0;
-  return {
-    name,
-    bulk,
-    count
-  };
-};
-
-class slotTracker_SlotTracker {
-  constructor(char) {
-    var _getObj;
-
-    this.char = char;
-    this.charName = (_getObj = getObj('character', char.id)) === null || _getObj === void 0 ? void 0 : _getObj.get('name');
-    this.resources = new charResources_CharResources(char.id);
-    this.slotRes = this.resources.getOrCreateByName(SLOT_RESOURCE_NAME);
-    if (this.slotRes.curr === '') this.slotRes.curr = '0';
-    if (this.slotRes.max === '') this.slotRes.max = '0';
-  }
-
-  get isContainer() {
-    return this.char.size === 'Container';
-  }
-
-  update() {
-    let max = this.maxSlots();
-    let bulk = this.totalItemBulk() + this.totalCoinBulk();
-    this.slotRes.curr = bulk;
-    this.slotRes.max = max;
-    let name = SLOT_RESOURCE_NAME;
-
-    if (bulk > Math.floor(max * 1.5)) {
-      name += ' (OVERLOADED)';
-      this.setOverloaded();
-    } else if (bulk > max) {
-      name += ' (ENCUMBERED)';
-      this.setEncumbered();
-    } else {
-      this.setUnencumbered();
-    }
-
-    this.slotRes.name = name;
-  }
-
-  setOverloaded() {
-    let token = this.char.findToken();
-    if (!token) return;
-    let changed = Object(SloUtils["d" /* addStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
-    changed = changed || token.get('tint_color') !== '#BB3333';
-    token.set('tint_color', '#BB3333');
-
-    if (changed) {
-      sendChat('Slot5e', OVERLOADED_MSG(this.charName), null, {
-        noarchive: true
-      });
-    }
-  }
-
-  setEncumbered() {
-    let token = this.char.findToken();
-    if (!token) return;
-    CombatMaster.addConditionToToken(token, 'encumbered'); // TODO: Make Encumbered marker configurable
-
-    let changed = Object(SloUtils["d" /* addStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
-    changed = changed || token.get('tint_color') !== 'transparent';
-    token.set('tint_color', 'transparent');
-
-    if (changed) {
-      sendChat('Slot5e', ENCUMBERED_MSG(this.charName), null, {
-        noarchive: true
-      });
-    }
-  }
-
-  setUnencumbered() {
-    let token = this.char.findToken();
-    if (!token) return;
-    let changed = Object(SloUtils["g" /* removeStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
-    token.set('tint_color', 'transparent');
-
-    if (changed) {
-      sendChat('Slot5e', UNENCUMBERED_MSG(this.charName), null, {
-        noarchive: true
-      });
-    }
-  }
-
-  maxSlots() {
-    if (this.isContainer) {
-      return parseInt(this.char.class_resource);
-    }
-
-    let size = (this.char.size || 'Medium').toLowerCase();
-    let strMod = parseInt(this.char.strength_mod);
-    let conMod = parseInt(this.char.constitution_mod);
-    let mod = Math.max(strMod, conMod);
-    if (isNaN(mod)) throw new Error(`Invalid str/con modifier for character ${this.char.id}`);
-
-    switch (size) {
-      case 'tiny':
-        return 6 + mod;
-
-      case 'small':
-        return 14 + mod;
-
-      case 'medium':
-        return 18 + mod;
-
-      case 'large':
-        return 22 + mod * 2;
-
-      case 'huge':
-        return 30 + mod * 4;
-
-      case 'gargantuan':
-        return 46 + mod * 8;
-    }
-
-    return 18 + mod;
-  }
-
-  totalItemBulk() {
-    let total = 0;
-
-    for (const item of this.char.repeating.inventory) {
-      if (item.equipped === '0') continue;
-      const {
-        name,
-        bulk,
-        count
-      } = parseItem(item);
-      total += bulk * count;
-    }
-
-    return total;
-  }
-
-  totalCoinBulk() {
-    let coins = [this.char.cp, this.char.sp, this.char.ep, this.char.gp, this.char.pp];
-    let numCoins = coins.reduce((sum, coin) => {
-      let val = parseInt(coin);
-      return isNaN(val) ? sum : sum + val;
-    }, 0);
-
-    if (!this.isContainer) {
-      // Take into account the 100 "free" coins
-      numCoins = Math.max(0, numCoins - 100);
-    }
-
-    let bulk = Math.ceil(numCoins / 100);
-    return bulk;
-  }
-
-  toString() {
-    return `Inventory Slots: ${this.slotRes.curr} / ${this.slotRes.max}`;
-  }
-
-}
-// CONCATENATED MODULE: ./Slot5e/index.js
+/* harmony import */ var _SloUtils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(0);
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
+ // TODO: Move this into SloUtils
 
+const multiCommand = (opts, msg, targetArg, action) => {
+  let targets;
 
-const invAttrRegex = new RegExp('^([csegp]p)|repeating_inventory_([^_]*)_(itemcount|itemweight|equipped)');
+  if (opts[targetArg]) {
+    targets = opts[targetArg].split(',').map(id => getObj('graphic', id));
+  } else {
+    targets = msg.selected.map(s => getObj('graphic', s._id));
+  }
 
-class Slot5e_Slot5e extends Object(SloUtils["b" /* ScriptBase */])({
-  name: 'Slot5e',
-  version: '0.3.1',
-  stateKey: 'SLOT_5E',
+  targets = targets.filter(t => !!t);
+  if (!targets.length) throw new Error(`Targets must be specified with a selection or with the --${targetArg} arg!`);
+  targets.map(target => action(target));
+};
+
+class _SaltySeas extends Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* ScriptBase */ "b"])({
+  name: 'SaltySeas',
+  version: '0.0.1',
+  stateKey: 'SALTY_SEAS',
   initialState: {}
 }) {
   constructor() {
@@ -1055,90 +733,104 @@ class Slot5e_Slot5e extends Object(SloUtils["b" /* ScriptBase */])({
 
     _defineProperty(this, "log", msg => log(`${this.name}: ${msg}`));
 
-    _defineProperty(this, "onAddAttribute", attr => {
-      if (attr.get('name').match(invAttrRegex)) {
-        this.getTrackerForId(attr.get('_characterid')).update();
-      }
-    });
-
-    _defineProperty(this, "onChangeAttribute", (attr, oldAttr) => {
-      if (attr.get('name').match(invAttrRegex)) {
-        this.getTrackerForId(attr.get('_characterid')).update();
-      }
-    });
-
-    _defineProperty(this, "onDestroyAttribute", attr => {
-      if (attr.get('name').match(invAttrRegex)) {
-        this.getTrackerForId(attr.get('_characterid')).update();
-      }
-    });
-
-    _defineProperty(this, "onAddCharacter", char => {
-      this.log(`Adding tracker for ${char.get('name')}`);
-      this.trackers[char.id] = new slotTracker_SlotTracker(SloUtils["a" /* Character */].fromId(char.id));
-      this.trackers[char.id].update();
-    });
-
-    _defineProperty(this, "onDestroyCharacter", char => {
-      this.log(`Removing tracker for ${char.get('name')}`);
-      delete this.pcs[char.id];
-    });
-
-    this.trackers = {};
-    on('ready', () => {
-      on('add:attribute', this.onAddAttribute);
-      on('change:attribute', this.onChangeAttribute);
-      on('destroy:attribute', this.onDestroyAttribute);
-      on('add:character', this.onAddCharacter);
-      on('destroy:character', this.onDestroyCharacter);
-      const chars = findObjs({
-        _type: 'character',
-        archived: false
-      }).filter(char => String(getAttrByName(char.id, 'npc')) !== '1');
-
-      for (const char of chars) {
-        this.log(`Adding tracker for ${char.get('name')}`);
-        this.trackers[char.id] = new slotTracker_SlotTracker(SloUtils["a" /* Character */].fromId(char.id));
-        this.trackers[char.id].update();
-      }
-    });
-    this.parser = new CommandParser('!slot5e').default(() => {
-      let names = [];
-
-      for (const id in this.trackers) {
-        this.trackers[id].update();
-        names.push(this.trackers[id].charName);
-      }
-
-      sendChat(this.name, `Manually updated slots for ${names.join(', ')}`);
-    }).command('container', (opts, msg) => {
-      const name = opts._.join(' ') || 'Container';
-      const containerChar = createObj('character', {
-        name,
-        inplayerjournals: 'all',
-        controlledby: 'all'
+    if (!CombatMaster) throw new Error('You must have CombatMaster installed for this script to work!');
+    on('ready', () => {});
+    this.parser = new CommandParser('!saltyseas').default(() => {
+      sendChat(`Salty Seas campaign companion script v${this.version}`);
+    }).command('addCondition', ({
+      targetId,
+      condition
+    }, msg) => {
+      if (!condition) throw new Error('Invalid args supplied for addCondition. Expected targetId and condition');
+      multiCommand({
+        targetId,
+        condition
+      }, msg, 'targetId', target => {
+        CombatMaster.addConditionToToken(target, condition);
       });
-      const container = SloUtils["a" /* Character */].fromId(containerChar.id);
-      container.size = 'Container';
-      container.npc = '0';
-      container.class_resource_name = 'Capacity';
-      container.class_resource = opts.slots;
-      container.mancer_cancel = 'on';
-      sendChat(this.name, `Created container "${name}"`);
+    }).command('hasCondition', ({
+      targetId,
+      condition,
+      custom
+    }, msg) => {
+      if (!condition) throw new Error('Invalid args supplied for hasCondition. Expected targetId and condition');
+      const target = targetId ? getObj('graphic', targetId) : getObj('graphic', msg.selected[0]._id);
+      const hasCondition = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(target, condition, custom ? _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM : _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].DEFAULT);
+      sendChat(this.name, hasCondition ? '1' : '0');
+    }).command('thunderGauntlet', ({
+      sourceId,
+      targetId
+    }) => {
+      const source = getObj('graphic', sourceId);
+      const target = getObj('graphic', targetId);
+      CombatMaster.addConditionToToken(source, 'distracted');
+      setTimeout(() => {
+        CombatMaster.addTargetsToCondition([{
+          _id: targetId
+        }], sourceId, 'distracted');
+      }, 600);
+    }).command('hexbladeAttack', ({
+      title,
+      attackRoll,
+      toHitBonus = '+0',
+      baseDamage,
+      critDamage,
+      selectedId,
+      targetId,
+      sneak
+    }, msg) => {
+      const selected = _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Character */ "a"].fromToken(selectedId);
+      const target = _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Character */ "a"].fromToken(targetId);
+      const targetToken = getObj('graphic', targetId);
+      const isCursed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(targetToken, 'HexbladesCurse', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM);
+      const isHexed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(targetToken, 'Hex', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM);
+      const cursedBonus = isCursed ? `+ ${selected.pb} [Curse] ` : '';
+      const hexedBonus = isHexed ? `+ 1d6 [Hex] ` : '';
+      const critHexedBonus = isHexed ? `+ 2d6 [Hex] ` : '';
+      const healAmount = Math.max(parseInt(selected.multiclass1_lvl) + parseInt(selected.charisma_mod), 1);
+      const sneakBonus = sneak ? `+ ${Math.ceil(selected.base_level / 2)}d6 [Sneak] ` : '';
+      const critSneakBonus = sneak ? `+ ${Math.ceil(selected.base_level / 2) * 2}d6 [Sneak] ` : '';
+      sendChat(msg.who, `!power {{ 
+  --name|${title}
+  --Attack Roll|You roll [[ [$atk] ${attackRoll}${toHitBonus} + ${selected.dexterity_mod} [DEX] + ${selected.pb} [Prof] ]]
+  --?? ${isCursed ? '1' : '0'} == 1 ?? Curse|The target is cursed!
+  --?? ${isHexed ? '1' : '0'} == 1 ?? Hex|The target is hexed!
+  --?? $atk.base == 20 ?? skipto*1|Critical
+  --?? $atk.base == 19 AND ${isCursed ? '1' : '0'} == 1 ?? skipto*2|Critical
+  --?? $atk.base == 1 ?? skipto*3|Fumble
+  --?? $atk.total >= ${target.npc_ac} ?? skipto*4|Hit
+  
+  --:Miss| Since we didn't skip to anywhere else, assume a miss
+  --Miss|Your attack missed.
+  --skipto*5|EndOfCard
+
+  --:Fumble|
+  --Natural 1|You miss horribly!
+  --skipto*6|EndOfCard
+
+  --:Hit|
+  --Hit!|Your ${sneak ? 'sneak ' : ''}attack hit for [[ [$Dmg] ${baseDamage} + ${selected.dexterity_mod}${cursedBonus}${hexedBonus}${sneakBonus} ]] damage!
+  --skipto*7|EndOfCard
+
+  --:Critical|
+  --Critical Hit|You strike a decisive blow for [[ [$CritDmg] ${critDamage} + ${selected.dexterity_mod}${cursedBonus}${critHexedBonus}${critSneakBonus} ]] damage!
+
+  --:EndOfCard|
+}}`);
+      if (isCursed) sendChat(this.name, `If the target dies, heal for ${healAmount}`);
+    }).command('test', ({}, msg) => {
+      sendChat(this.name, `!power {{
+          --name|Hexblade's Curse
+          --leftsub|Debuff
+          --rightsub|Range 30 ft.
+          --?? 1 == 1 ?? api_saltyseas|addCondition _targetId=@{target|token_id} _condition=hexbladecurse
+          }}`);
     });
-  }
-
-  getTrackerForId(id) {
-    if (!(id in this.trackers)) {
-      this.trackers[id] = new slotTracker_SlotTracker(SloUtils["a" /* Character */].fromId(id));
-    }
-
-    return this.trackers[id];
   }
 
 }
 
-const Slot5e = new Slot5e_Slot5e();
+const SaltySeas = new _SaltySeas();
 
 /***/ })
 /******/ ]);

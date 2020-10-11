@@ -46,3 +46,33 @@ Eldritch Cannon Summon
 ~status red
 }}
 ```
+
+Hexblade Attack
+```
+!power {{ 
+  --name|Longbow
+  --Attack Roll|You roll [[ [$atk] ?{Roll Type|Normal,1d20|Advantage,3d20kh1|Disadvantage,2d20kl1} + @{selected|dexterity_mod} + @{selected|pb} ]]
+  --?? $atk.base == 20 ?? skipto*1|Critical
+  --?? $atk.base == 19 AND #iscursed == 1 ?? skipto*2|Critical
+  --?? $atk.base == 1 ?? skipto*3|Fumble
+  --?? $atk.total >= @{target|npc_ac} ?? skipto*4|Hit
+  
+  --:Miss| Since we didn't skip to anywhere else, assume a miss
+  --Miss|Your attack missed.
+  --skipto*5|EndOfCard
+
+  --:Fumble|
+  --Fumble|You miss horribly!
+  --Extra Fumble Stuff|Maybe a roll on a fumble table?
+  --skipto*6|EndOfCard
+
+  --:Hit|
+  --Hit!|Your attack hit for [[ [$Dmg] 1d8 + 1d4 + @{selected|dexterity_mod} + ( 0#iscursed * @{selected|pb} ) ]] damage!
+  --skipto*7|EndOfCard
+
+  --:Critical|
+  --Critical Hit|You strike a decisive blow for [[ [$CritDmg] 2d8 + 2d4 + @{selected|dexterity_mod} + ( 0#iscursed * @{selected|pb} ) ]] damage!
+
+  --:EndOfCard|
+}}
+```

@@ -6,6 +6,7 @@ const config = {
   mode: 'production',
   entry: {
     Slot5e: './Slot5e/index.js',
+    SaltySeas: './SaltySeas/index.js',
   },
   output: {
     filename: '[name].js',
