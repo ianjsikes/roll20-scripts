@@ -23,11 +23,13 @@ class RepeatingSection {
       prefixes.forEach((prefix) => {
         var charId = obj.char.id
         var rowPrefix = prefix
+        const rowId = prefix.match(new RegExp(`repeating_[^_]*_([^_]*)_`))[1]
         retval.push(
           new Proxy(
             {
               charId: obj.char.id,
               prefix: prefix,
+              rowId,
               delRow: () => {
                 findObjs({ _characterid: charId, _type: 'attribute' }).forEach((i) => {
                   if (i.get('name').indexOf(rowPrefix) > -1) {
@@ -73,16 +75,27 @@ class RepeatingSection {
       if (prop == 'delRow') return obj.delRow
       if (prop == 'prefix') return obj.prefix
       if (prop == 'charId') return obj.charId
+      if (prop == 'rowId') return obj.rowId
       var retval = null
+      let subprop = 'current'
+      if (prop.startsWith('MAX_')) {
+        subprop = 'max'
+        prop = prop.slice(4)
+      }
       findObjs({ _characterid: obj.charId, _type: 'attribute', _name: obj.prefix + prop }).forEach((i) => {
-        retval = i.get('current')
+        retval = i.get(subprop)
       })
       //if(retval==null) log(`Warning: Unable to find property "${prop}" Returning NULL. `);
       return retval
     },
     set: (obj, prop, value) => {
+      let subprop = 'current'
+      if (prop.startsWith('MAX_')) {
+        subprop = 'max'
+        prop = prop.slice(4)
+      }
       findObjs({ _characterid: obj.charId, _type: 'attribute', _name: obj.prefix + prop }).forEach((i) => {
-        i.setWithWorker({ current: value })
+        i.setWithWorker({ [subprop]: value })
       })
       return true
     },
@@ -253,4 +266,17 @@ export class Character {
       return true
     },
   }
+}
+
+export const getCharactersForPlayer = (playerId) => {
+  return findObjs({ type: 'character' }).filter((char) => {
+    let isPC = String(getAttrByName(char.id, 'npc')) !== '1'
+    return (
+      isPC &&
+      char
+        .get('controlledby')
+        .split(',')
+        .some((c) => c === 'all' || c === playerId)
+    )
+  })
 }

@@ -51,7 +51,8 @@ export class CommandParser {
           } else {
             delete group[btnId]
           }
-          await action()
+          const opts = this.parseArgs(args)
+          await action(opts, msg)
           return
         }
       }

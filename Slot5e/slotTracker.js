@@ -1,38 +1,44 @@
-import { addStatus, removeStatus, StatusType } from '../SloUtils'
+import { addStatus, removeStatus, StatusType, elements, iconHeader, menuWithHeader } from '../SloUtils'
+
 import { CharResources } from './charResources'
+const { div, span, ul, li } = elements
 
 export const SLOT_RESOURCE_NAME = 'Slots'
 
-const buildStatusMessage = (title, body, color = '#000') => {
-  return (
-    `<div style="background-color: #fff ; border: 1px solid ${color} ; padding: 5px ; border-radius: 5px ; overflow: hidden">` +
-    `<div style="font-size: 14px ; font-weight: bold ; background-color: ${color}; padding: 3px ; border-top-left-radius: 3px ; border-top-right-radius: 3px">` +
-    `<span style="color: white">` +
-    `<div style="width: 1.7em ; vertical-align: middle ; height: 1.7em ; display: inline-block ; margin: 0 3px 0 0 ; border: 0 ; padding: 0 ; background-image: url(&quot;https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495&quot;) ; background-repeat: no-repeat ; background-size: auto 1.7em"></div>` +
-    `${title}` +
-    `</span>` +
-    `</div>` +
-    `${body}` +
-    `</div>`
-  )
-}
-
 const ENCUMBERED_MSG = (name) =>
-  buildStatusMessage(
-    `${name} is Encumbered`,
-    `<ul>` +
-      `<li>Your speed is halved</li>` +
-      `<li>You have disadvantage on ability checks, attack rolls, and saving throws that use Strength, Dexterity, or Constitution</li>` +
-      `</ul>`,
+  menuWithHeader(
+    iconHeader(
+      `${name} is Encumbered`,
+      'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'
+    ),
+    ul(
+      li(`Your speed is halved`),
+      li(
+        `You have disadvantage on ability checks, attack rolls, and saving throws that use Strength, Dexterity, or Constitution`
+      )
+    ),
     `#c27913`
   )
+
 const OVERLOADED_MSG = (name) =>
-  buildStatusMessage(
-    `${name} is Overloaded`,
+  menuWithHeader(
+    iconHeader(
+      `${name} is Overloaded`,
+      'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'
+    ),
     `You are carrying too much! You cannot do anything until you drop some items.`,
     `#c22513`
   )
-const UNENCUMBERED_MSG = (name) => buildStatusMessage(`${name} is no longer Encumbered`, ``, `#13c24d`)
+
+const UNENCUMBERED_MSG = (name) =>
+  menuWithHeader(
+    iconHeader(
+      `${name} is no longer Encumbered`,
+      'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'
+    ),
+    ``,
+    `#13c24d`
+  )
 
 const parseItem = (item) => {
   const name = item.itemname
@@ -113,7 +119,9 @@ export class SlotTracker {
     token.set('tint_color', 'transparent')
 
     if (changed) {
-      sendChat('Slot5e', ENCUMBERED_MSG(this.charName), null, { noarchive: true })
+      let msg = ENCUMBERED_MSG(this.charName)
+      log(msg)
+      sendChat('Slot5e', msg, null, { noarchive: true })
     }
   }
 

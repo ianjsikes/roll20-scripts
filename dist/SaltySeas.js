@@ -91,15 +91,23 @@
 "use strict";
 
 // EXPORTS
-__webpack_require__.d(__webpack_exports__, "e", function() { return /* reexport */ generateRowID; });
-__webpack_require__.d(__webpack_exports__, "b", function() { return /* reexport */ ScriptBase; });
+__webpack_require__.d(__webpack_exports__, "m", function() { return /* reexport */ randomId; });
+__webpack_require__.d(__webpack_exports__, "g", function() { return /* reexport */ generateRowID; });
+__webpack_require__.d(__webpack_exports__, "o", function() { return /* reexport */ who; });
+__webpack_require__.d(__webpack_exports__, "b", function() { return /* reexport */ commandParser_CommandParser; });
+__webpack_require__.d(__webpack_exports__, "c", function() { return /* reexport */ ScriptBase; });
 __webpack_require__.d(__webpack_exports__, "a", function() { return /* reexport */ Character; });
-__webpack_require__.d(__webpack_exports__, "c", function() { return /* reexport */ StatusType; });
-__webpack_require__.d(__webpack_exports__, "g", function() { return /* reexport */ removeStatus; });
-__webpack_require__.d(__webpack_exports__, "f", function() { return /* reexport */ hasStatus; });
-__webpack_require__.d(__webpack_exports__, "d", function() { return /* reexport */ addStatus; });
+__webpack_require__.d(__webpack_exports__, "h", function() { return /* reexport */ getCharactersForPlayer; });
+__webpack_require__.d(__webpack_exports__, "d", function() { return /* reexport */ StatusType; });
+__webpack_require__.d(__webpack_exports__, "n", function() { return /* reexport */ removeStatus; });
+__webpack_require__.d(__webpack_exports__, "i", function() { return /* reexport */ hasStatus; });
+__webpack_require__.d(__webpack_exports__, "e", function() { return /* reexport */ addStatus; });
+__webpack_require__.d(__webpack_exports__, "f", function() { return /* reexport */ h_elements; });
+__webpack_require__.d(__webpack_exports__, "j", function() { return /* reexport */ iconHeader; });
+__webpack_require__.d(__webpack_exports__, "l", function() { return /* reexport */ menuWithHeader; });
+__webpack_require__.d(__webpack_exports__, "k", function() { return /* reexport */ listMenu; });
 
-// UNUSED EXPORTS: randomId, generateUUID, who, whisper, sendChatAsync, roll, rollData, objectCache, CommandParser
+// UNUSED EXPORTS: generateUUID, whisper, sendChatAsync, roll, rollData, objectCache, h, kebabCase
 
 // CONCATENATED MODULE: ./SloUtils/ids.js
 const randomId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -242,6 +250,7 @@ class commandParser_CommandParser {
     if (msg.type !== 'api') return;
     let content = msg.content.trim();
     let [trigger, subCommand, ...args] = content.split(' ');
+    log(`Handling message ${trigger} ~ ${subCommand} ~ ${JSON.stringify(args)}`);
 
     if (trigger !== this.trigger) {
       if (!this.aliases.length || !this.aliases.includes(trigger)) {
@@ -262,7 +271,8 @@ class commandParser_CommandParser {
             delete group[btnId];
           }
 
-          await action();
+          const opts = this.parseArgs(args);
+          await action(opts, msg);
           return;
         }
       }
@@ -390,9 +400,11 @@ character_defineProperty(RepeatingSection, "repeatingSectionHandler", {
     prefixes.forEach(prefix => {
       var charId = obj.char.id;
       var rowPrefix = prefix;
+      const rowId = prefix.match(new RegExp(`repeating_[^_]*_([^_]*)_`))[1];
       retval.push(new Proxy({
         charId: obj.char.id,
         prefix: prefix,
+        rowId,
         delRow: () => {
           findObjs({
             _characterid: charId,
@@ -444,25 +456,40 @@ character_defineProperty(RepeatingSection, "repeatingRowHandler", {
     if (prop == 'delRow') return obj.delRow;
     if (prop == 'prefix') return obj.prefix;
     if (prop == 'charId') return obj.charId;
+    if (prop == 'rowId') return obj.rowId;
     var retval = null;
+    let subprop = 'current';
+
+    if (prop.startsWith('MAX_')) {
+      subprop = 'max';
+      prop = prop.slice(4);
+    }
+
     findObjs({
       _characterid: obj.charId,
       _type: 'attribute',
       _name: obj.prefix + prop
     }).forEach(i => {
-      retval = i.get('current');
+      retval = i.get(subprop);
     }); //if(retval==null) log(`Warning: Unable to find property "${prop}" Returning NULL. `);
 
     return retval;
   },
   set: (obj, prop, value) => {
+    let subprop = 'current';
+
+    if (prop.startsWith('MAX_')) {
+      subprop = 'max';
+      prop = prop.slice(4);
+    }
+
     findObjs({
       _characterid: obj.charId,
       _type: 'attribute',
       _name: obj.prefix + prop
     }).forEach(i => {
       i.setWithWorker({
-        current: value
+        [subprop]: value
       });
     });
     return true;
@@ -659,6 +686,15 @@ character_defineProperty(Character, "attrHandler", {
     return true;
   }
 });
+
+const getCharactersForPlayer = playerId => {
+  return findObjs({
+    type: 'character'
+  }).filter(char => {
+    let isPC = String(getAttrByName(char.id, 'npc')) !== '1';
+    return isPC && char.get('controlledby').split(',').some(c => c === 'all' || c === playerId);
+  });
+};
 // CONCATENATED MODULE: ./SloUtils/token.js
 const StatusType = {
   DEFAULT: 'DEFAULT',
@@ -688,7 +724,161 @@ const addStatus = (token, status, statusType = StatusType.DEFAULT) => {
   token.set('statusmarkers', statuses.join());
   return true;
 };
+// CONCATENATED MODULE: ./SloUtils/string.js
+const kebabCase = string => string.replace(/([A-Z])([A-Z])/g, '$1-$2').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase();
+// CONCATENATED MODULE: ./SloUtils/h.js
+
+
+const renderStyle = style => {
+  if (typeof style === 'string') return style;
+  let res = '';
+
+  for (const key in style) {
+    let val = style[key];
+
+    if (typeof val === 'number') {
+      val = `${val}px`;
+    }
+
+    res += `${kebabCase(key)}:${val};`;
+  }
+
+  return `"${res}"`;
+};
+
+const h = (tag, attrsOrChild, ...children) => {
+  try {
+    let attrs = {};
+
+    if (!!attrsOrChild) {
+      if (typeof attrsOrChild === 'object' && !Array.isArray(attrsOrChild)) {
+        attrs = attrsOrChild;
+      } else {
+        children.unshift(attrsOrChild);
+      }
+    }
+
+    const renderArr = arr => {
+      let res = '';
+
+      for (const el of arr) {
+        if (typeof el === 'string' || typeof el === 'number') {
+          res += el;
+        } else if (Array.isArray(el)) {
+          res += renderArr(el);
+        }
+      }
+
+      return res;
+    };
+
+    let attrStr = '';
+
+    for (const attrKey in attrs) {
+      if (attrKey === 'style') {
+        attrStr += `style=${renderStyle(attrs.style)} `;
+      } else {
+        attrStr += `${kebabCase(attrKey)}="${attrs[attrKey]}" `;
+      }
+    }
+
+    const childrenStr = renderArr(children);
+    return `<${tag} ${attrStr}>${childrenStr}</${tag}>`;
+  } catch (error) {
+    return `ERROR ${error.message}`;
+  }
+};
+
+const makeEl = tag => (...children) => h(tag, ...children);
+
+const h_elements = {
+  div: makeEl('div'),
+  a: makeEl('a'),
+  p: makeEl('p'),
+  ul: makeEl('ul'),
+  ol: makeEl('ol'),
+  li: makeEl('li'),
+  span: makeEl('span'),
+  img: makeEl('img'),
+  hr: makeEl('hr'),
+  pre: makeEl('pre'),
+  br: makeEl('br'),
+  b: makeEl('b'),
+  table: makeEl('table'),
+  tr: makeEl('tr'),
+  td: makeEl('td'),
+  th: makeEl('th'),
+  h1: makeEl('h1'),
+  h2: makeEl('h2'),
+  h3: makeEl('h3'),
+  h4: makeEl('h4'),
+  h5: makeEl('h5'),
+  h6: makeEl('h6')
+};
+// CONCATENATED MODULE: ./SloUtils/menu.js
+
+const {
+  div,
+  span,
+  ul,
+  li
+} = h_elements;
+const iconHeader = (title, url) => {
+  return div({
+    style: {
+      width: '1.7em',
+      verticalAlign: 'middle',
+      height: '1.7em',
+      display: 'inline-block',
+      margin: '0 3px 0 0',
+      border: 0,
+      padding: 0,
+      backgroundImage: `url(&quot;${url}&quot;)`,
+      backgroundRepeat: 'no-repeat',
+      backgroundSize: 'auto 1.7em'
+    }
+  }) + title;
+};
+const menuWithHeader = (title, body, color = '#000') => {
+  return div({
+    style: {
+      backgroundColor: 'white',
+      border: `1px solid ${color}`,
+      padding: 5,
+      borderRadius: 5,
+      overflow: 'hidden'
+    }
+  }, div({
+    style: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      backgroundColor: color,
+      padding: 3,
+      borderTopLeftRadius: 3,
+      borderTopRightRadius: 3
+    }
+  }, span({
+    style: {
+      color: 'white'
+    }
+  }, title)), body);
+};
+const listMenu = ({
+  title,
+  color = '#000',
+  data,
+  renderItem
+}) => {
+  return menuWithHeader(title, ul({
+    style: 'padding:0;margin:0;list-style:none;'
+  }, ...data.map((item, index) => {
+    return li(renderItem(item, index));
+  })), color);
+};
 // CONCATENATED MODULE: ./SloUtils/index.js
+
+
+
 
 
 
@@ -722,7 +912,7 @@ const multiCommand = (opts, msg, targetArg, action) => {
   targets.map(target => action(target));
 };
 
-class _SaltySeas extends Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* ScriptBase */ "b"])({
+class _SaltySeas extends Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* ScriptBase */ "c"])({
   name: 'SaltySeas',
   version: '0.0.1',
   stateKey: 'SALTY_SEAS',
@@ -755,7 +945,7 @@ class _SaltySeas extends Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Script
     }, msg) => {
       if (!condition) throw new Error('Invalid args supplied for hasCondition. Expected targetId and condition');
       const target = targetId ? getObj('graphic', targetId) : getObj('graphic', msg.selected[0]._id);
-      const hasCondition = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(target, condition, custom ? _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM : _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].DEFAULT);
+      const hasCondition = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "i"])(target, condition, custom ? _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "d"].CUSTOM : _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "d"].DEFAULT);
       sendChat(this.name, hasCondition ? '1' : '0');
     }).command('thunderGauntlet', ({
       sourceId,
@@ -782,8 +972,8 @@ class _SaltySeas extends Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Script
       const selected = _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Character */ "a"].fromToken(selectedId);
       const target = _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* Character */ "a"].fromToken(targetId);
       const targetToken = getObj('graphic', targetId);
-      const isCursed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(targetToken, 'HexbladesCurse', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM);
-      const isHexed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "f"])(targetToken, 'Hex', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "c"].CUSTOM);
+      const isCursed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "i"])(targetToken, 'HexbladesCurse', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "d"].CUSTOM);
+      const isHexed = Object(_SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* hasStatus */ "i"])(targetToken, 'Hex', _SloUtils__WEBPACK_IMPORTED_MODULE_0__[/* StatusType */ "d"].CUSTOM);
       const cursedBonus = isCursed ? `+ ${selected.pb} [Curse] ` : '';
       const hexedBonus = isHexed ? `+ 1d6 [Hex] ` : '';
       const critHexedBonus = isHexed ? `+ 2d6 [Hex] ` : '';

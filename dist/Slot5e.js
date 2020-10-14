@@ -91,15 +91,23 @@
 "use strict";
 
 // EXPORTS
-__webpack_require__.d(__webpack_exports__, "e", function() { return /* reexport */ generateRowID; });
-__webpack_require__.d(__webpack_exports__, "b", function() { return /* reexport */ ScriptBase; });
+__webpack_require__.d(__webpack_exports__, "m", function() { return /* reexport */ randomId; });
+__webpack_require__.d(__webpack_exports__, "g", function() { return /* reexport */ generateRowID; });
+__webpack_require__.d(__webpack_exports__, "o", function() { return /* reexport */ who; });
+__webpack_require__.d(__webpack_exports__, "b", function() { return /* reexport */ commandParser_CommandParser; });
+__webpack_require__.d(__webpack_exports__, "c", function() { return /* reexport */ ScriptBase; });
 __webpack_require__.d(__webpack_exports__, "a", function() { return /* reexport */ Character; });
-__webpack_require__.d(__webpack_exports__, "c", function() { return /* reexport */ StatusType; });
-__webpack_require__.d(__webpack_exports__, "g", function() { return /* reexport */ removeStatus; });
-__webpack_require__.d(__webpack_exports__, "f", function() { return /* reexport */ hasStatus; });
-__webpack_require__.d(__webpack_exports__, "d", function() { return /* reexport */ addStatus; });
+__webpack_require__.d(__webpack_exports__, "h", function() { return /* reexport */ getCharactersForPlayer; });
+__webpack_require__.d(__webpack_exports__, "d", function() { return /* reexport */ StatusType; });
+__webpack_require__.d(__webpack_exports__, "n", function() { return /* reexport */ removeStatus; });
+__webpack_require__.d(__webpack_exports__, "i", function() { return /* reexport */ hasStatus; });
+__webpack_require__.d(__webpack_exports__, "e", function() { return /* reexport */ addStatus; });
+__webpack_require__.d(__webpack_exports__, "f", function() { return /* reexport */ h_elements; });
+__webpack_require__.d(__webpack_exports__, "j", function() { return /* reexport */ iconHeader; });
+__webpack_require__.d(__webpack_exports__, "l", function() { return /* reexport */ menuWithHeader; });
+__webpack_require__.d(__webpack_exports__, "k", function() { return /* reexport */ listMenu; });
 
-// UNUSED EXPORTS: randomId, generateUUID, who, whisper, sendChatAsync, roll, rollData, objectCache, CommandParser
+// UNUSED EXPORTS: generateUUID, whisper, sendChatAsync, roll, rollData, objectCache, h, kebabCase
 
 // CONCATENATED MODULE: ./SloUtils/ids.js
 const randomId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -242,6 +250,7 @@ class commandParser_CommandParser {
     if (msg.type !== 'api') return;
     let content = msg.content.trim();
     let [trigger, subCommand, ...args] = content.split(' ');
+    log(`Handling message ${trigger} ~ ${subCommand} ~ ${JSON.stringify(args)}`);
 
     if (trigger !== this.trigger) {
       if (!this.aliases.length || !this.aliases.includes(trigger)) {
@@ -262,7 +271,8 @@ class commandParser_CommandParser {
             delete group[btnId];
           }
 
-          await action();
+          const opts = this.parseArgs(args);
+          await action(opts, msg);
           return;
         }
       }
@@ -390,9 +400,11 @@ character_defineProperty(RepeatingSection, "repeatingSectionHandler", {
     prefixes.forEach(prefix => {
       var charId = obj.char.id;
       var rowPrefix = prefix;
+      const rowId = prefix.match(new RegExp(`repeating_[^_]*_([^_]*)_`))[1];
       retval.push(new Proxy({
         charId: obj.char.id,
         prefix: prefix,
+        rowId,
         delRow: () => {
           findObjs({
             _characterid: charId,
@@ -444,25 +456,40 @@ character_defineProperty(RepeatingSection, "repeatingRowHandler", {
     if (prop == 'delRow') return obj.delRow;
     if (prop == 'prefix') return obj.prefix;
     if (prop == 'charId') return obj.charId;
+    if (prop == 'rowId') return obj.rowId;
     var retval = null;
+    let subprop = 'current';
+
+    if (prop.startsWith('MAX_')) {
+      subprop = 'max';
+      prop = prop.slice(4);
+    }
+
     findObjs({
       _characterid: obj.charId,
       _type: 'attribute',
       _name: obj.prefix + prop
     }).forEach(i => {
-      retval = i.get('current');
+      retval = i.get(subprop);
     }); //if(retval==null) log(`Warning: Unable to find property "${prop}" Returning NULL. `);
 
     return retval;
   },
   set: (obj, prop, value) => {
+    let subprop = 'current';
+
+    if (prop.startsWith('MAX_')) {
+      subprop = 'max';
+      prop = prop.slice(4);
+    }
+
     findObjs({
       _characterid: obj.charId,
       _type: 'attribute',
       _name: obj.prefix + prop
     }).forEach(i => {
       i.setWithWorker({
-        current: value
+        [subprop]: value
       });
     });
     return true;
@@ -659,6 +686,15 @@ character_defineProperty(Character, "attrHandler", {
     return true;
   }
 });
+
+const getCharactersForPlayer = playerId => {
+  return findObjs({
+    type: 'character'
+  }).filter(char => {
+    let isPC = String(getAttrByName(char.id, 'npc')) !== '1';
+    return isPC && char.get('controlledby').split(',').some(c => c === 'all' || c === playerId);
+  });
+};
 // CONCATENATED MODULE: ./SloUtils/token.js
 const StatusType = {
   DEFAULT: 'DEFAULT',
@@ -688,7 +724,161 @@ const addStatus = (token, status, statusType = StatusType.DEFAULT) => {
   token.set('statusmarkers', statuses.join());
   return true;
 };
+// CONCATENATED MODULE: ./SloUtils/string.js
+const kebabCase = string => string.replace(/([A-Z])([A-Z])/g, '$1-$2').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase();
+// CONCATENATED MODULE: ./SloUtils/h.js
+
+
+const renderStyle = style => {
+  if (typeof style === 'string') return style;
+  let res = '';
+
+  for (const key in style) {
+    let val = style[key];
+
+    if (typeof val === 'number') {
+      val = `${val}px`;
+    }
+
+    res += `${kebabCase(key)}:${val};`;
+  }
+
+  return `"${res}"`;
+};
+
+const h = (tag, attrsOrChild, ...children) => {
+  try {
+    let attrs = {};
+
+    if (!!attrsOrChild) {
+      if (typeof attrsOrChild === 'object' && !Array.isArray(attrsOrChild)) {
+        attrs = attrsOrChild;
+      } else {
+        children.unshift(attrsOrChild);
+      }
+    }
+
+    const renderArr = arr => {
+      let res = '';
+
+      for (const el of arr) {
+        if (typeof el === 'string' || typeof el === 'number') {
+          res += el;
+        } else if (Array.isArray(el)) {
+          res += renderArr(el);
+        }
+      }
+
+      return res;
+    };
+
+    let attrStr = '';
+
+    for (const attrKey in attrs) {
+      if (attrKey === 'style') {
+        attrStr += `style=${renderStyle(attrs.style)} `;
+      } else {
+        attrStr += `${kebabCase(attrKey)}="${attrs[attrKey]}" `;
+      }
+    }
+
+    const childrenStr = renderArr(children);
+    return `<${tag} ${attrStr}>${childrenStr}</${tag}>`;
+  } catch (error) {
+    return `ERROR ${error.message}`;
+  }
+};
+
+const makeEl = tag => (...children) => h(tag, ...children);
+
+const h_elements = {
+  div: makeEl('div'),
+  a: makeEl('a'),
+  p: makeEl('p'),
+  ul: makeEl('ul'),
+  ol: makeEl('ol'),
+  li: makeEl('li'),
+  span: makeEl('span'),
+  img: makeEl('img'),
+  hr: makeEl('hr'),
+  pre: makeEl('pre'),
+  br: makeEl('br'),
+  b: makeEl('b'),
+  table: makeEl('table'),
+  tr: makeEl('tr'),
+  td: makeEl('td'),
+  th: makeEl('th'),
+  h1: makeEl('h1'),
+  h2: makeEl('h2'),
+  h3: makeEl('h3'),
+  h4: makeEl('h4'),
+  h5: makeEl('h5'),
+  h6: makeEl('h6')
+};
+// CONCATENATED MODULE: ./SloUtils/menu.js
+
+const {
+  div,
+  span,
+  ul,
+  li
+} = h_elements;
+const iconHeader = (title, url) => {
+  return div({
+    style: {
+      width: '1.7em',
+      verticalAlign: 'middle',
+      height: '1.7em',
+      display: 'inline-block',
+      margin: '0 3px 0 0',
+      border: 0,
+      padding: 0,
+      backgroundImage: `url(&quot;${url}&quot;)`,
+      backgroundRepeat: 'no-repeat',
+      backgroundSize: 'auto 1.7em'
+    }
+  }) + title;
+};
+const menuWithHeader = (title, body, color = '#000') => {
+  return div({
+    style: {
+      backgroundColor: 'white',
+      border: `1px solid ${color}`,
+      padding: 5,
+      borderRadius: 5,
+      overflow: 'hidden'
+    }
+  }, div({
+    style: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      backgroundColor: color,
+      padding: 3,
+      borderTopLeftRadius: 3,
+      borderTopRightRadius: 3
+    }
+  }, span({
+    style: {
+      color: 'white'
+    }
+  }, title)), body);
+};
+const listMenu = ({
+  title,
+  color = '#000',
+  data,
+  renderItem
+}) => {
+  return menuWithHeader(title, ul({
+    style: 'padding:0;margin:0;list-style:none;'
+  }, ...data.map((item, index) => {
+    return li(renderItem(item, index));
+  })), color);
+};
 // CONCATENATED MODULE: ./SloUtils/index.js
+
+
+
 
 
 
@@ -706,9 +896,258 @@ const addStatus = (token, status, statusType = StatusType.DEFAULT) => {
 // ESM COMPAT FLAG
 __webpack_require__.r(__webpack_exports__);
 
-// EXTERNAL MODULE: ./SloUtils/index.js + 7 modules
+// EXTERNAL MODULE: ./SloUtils/index.js + 10 modules
 var SloUtils = __webpack_require__(0);
 
+// CONCATENATED MODULE: ./Slot5e/ui.js
+
+const {
+  span,
+  div,
+  a,
+  b,
+  ul,
+  li
+} = SloUtils["f" /* elements */];
+const ui_link = (text, href) => {
+  return a({
+    href,
+    style: {
+      backgroundColor: 'transparent',
+      color: 'black',
+      padding: 0,
+      display: 'initial',
+      border: 'none',
+      textDecoration: 'underline'
+    }
+  }, text);
+};
+const iconButton = (icon, title, link) => {
+  return div({
+    style: {
+      display: 'inline-block',
+      marginRight: 3,
+      padding: 1,
+      verticalAlign: 'middle'
+    }
+  }, a({
+    href: link,
+    title,
+    style: {
+      margin: 0,
+      padding: 0,
+      border: 'none',
+      backgroundColor: 'transparent'
+    }
+  }, span({
+    style: {
+      color: 'black',
+      padding: 0,
+      fontSize: 12,
+      fontFamily: `&quot;pictos&quot;`
+    }
+  }, icon)));
+};
+const itemListRow = ({
+  index,
+  text,
+  actions
+}) => {
+  return div({
+    style: {
+      backgroundColor: index % 2 === 0 ? 'white' : 'lightgrey',
+      width: '100%',
+      paddingLeft: 4
+    }
+  }, span({
+    style: {
+      maxWidth: '85%',
+      width: '100%',
+      display: 'inline-block',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap',
+      textOverflow: 'ellipsis'
+    }
+  }, text), span(actions.map(({
+    icon,
+    label,
+    action
+  }) => iconButton(icon, label, action))));
+};
+// CONCATENATED MODULE: ./Slot5e/inventory.js
+
+
+const {
+  ul: inventory_ul,
+  li: inventory_li,
+  b: inventory_b
+} = SloUtils["f" /* elements */];
+/**
+ * @typedef {Object} InvItem
+ * @param {string} [itemname]
+ * @param {string} [itemcount]
+ * @param {string} [itemweight]
+ * @param {string} [itemdesc]
+ * @param {string} [rowId]
+ */
+
+/**
+ * @typedef {Object} Item
+ * @property {string} id - The row ID if this is an inventory item, or a random ID if this is a ground item
+ * @property {string} name
+ * @property {number} bulk - The number of slots this item occupies
+ * @property {number} count - The quantity of this item that exists
+ * @property {string} [desc] - A description of the item
+ * @property {"ground" | string} location - The ID of the character that holds this item. Will be "ground" if it is not held.
+ */
+
+/**
+ *
+ * @param {InvItem} invItem
+ * @returns {Item}
+ */
+
+const fromInvItem = invItem => {
+  /** @type Item */
+  let item = {
+    id: invItem.rowId
+  };
+  item.name = invItem.itemname || 'Unnamed Item';
+  item.bulk = parseFloat(invItem.itemweight);
+  if (isNaN(item.bulk)) item.bulk = 0;
+  item.count = parseInt(invItem.itemcount);
+  if (isNaN(item.count)) item.count = 1;
+  item.desc = invItem.itemdesc;
+  return item;
+};
+/**
+ * @param {string} itemId
+ * @param {string} charId
+ * @returns {Item?}
+ */
+
+
+const getItemFromInventory = (itemId, charId) => {
+  let reg = new RegExp(`repeating_inventory_${itemId}_([^_]*)`);
+  let rawItem = {
+    rowId: itemId
+  };
+  findObjs({
+    characterid: charId,
+    type: 'attribute'
+  }).forEach(attr => {
+    let match = attr.get('name').match(reg);
+
+    if (match && match[1]) {
+      rawItem[match[1]] = attr.get('current');
+    }
+  });
+
+  if (Object.keys(rawItem).length === 1) {
+    throw new Error(`Unable to find item ${itemId} for character ${charId}!`);
+  }
+  /** @type Item */
+
+
+  return { ...fromInvItem(rawItem),
+    location: charId
+  };
+};
+/**
+ * Adds item to inventory. If the character has an item with matching
+ * name, bulk, and desc, it will update the quantity instead.
+ * @param {Item} item
+ * @param {number} count
+ * @param {string} charId
+ * @returns {Item} The inventory item created on the character
+ */
+
+const pickupItem = (item, count, charId) => {
+  const character = SloUtils["a" /* Character */].fromId(charId);
+
+  for (const invItem of character.repeating.inventory) {
+    const name = invItem.itemname;
+    let bulk = parseFloat(invItem.itemweight);
+    if (isNaN(bulk)) bulk = 0;
+    let desc = invItem.itemdesc;
+
+    if (name === item.name && bulk === item.bulk && desc === item.desc) {
+      invItem.itemcount += count;
+      return { ...fromInvItem(invItem),
+        location: charId
+      };
+    }
+  }
+
+  let invItem = {
+    itemname: item.name,
+    itemcount: count,
+    itemweight: item.bulk,
+    itemdesc: item.desc
+  };
+  const newItemId = character.repeating.inventory.addRow(invItem);
+  return { ...fromInvItem({ ...invItem,
+      rowId: newItemId
+    }),
+    location: charId
+  };
+};
+/**
+ * Removes an item from an inventory. If the inventory has more
+ * items than `count`, decrements the quantity instead.
+ * @param {string} itemId
+ * @param {number} count
+ * @param {string} charId
+ * @returns {Item} The ground item dropped
+ */
+
+const dropItem = (itemId, count, charId) => {
+  const character = SloUtils["a" /* Character */].fromId(charId);
+
+  for (const invItem of character.repeating.inventory) {
+    if (invItem.rowId === itemId) {
+      const groundItem = fromInvItem(invItem);
+      let invItemCount = groundItem.count;
+
+      if (count >= invItemCount) {
+        invItem.delRow();
+      } else {
+        invItem.itemcount = invItemCount - count;
+      }
+
+      groundItem.id = Object(SloUtils["m" /* randomId */])();
+      groundItem.count = count;
+      groundItem.location = 'ground';
+      return groundItem;
+    }
+  }
+};
+/**
+ * @param {Item} item
+ * @param {{ title: string, href: string }[]} actions
+ * @returns {string}
+ */
+
+const showItemCard = (item, actions) => {
+  let striped = false;
+
+  const row = (key, ...vals) => {
+    let renderedRow = inventory_li({
+      style: {
+        backgroundColor: striped ? 'lightgrey' : 'white'
+      }
+    }, inventory_b(`${key}: `), ...vals);
+    striped = !striped;
+    return renderedRow;
+  };
+
+  return Object(SloUtils["l" /* menuWithHeader */])(item.name, inventory_ul({
+    style: 'padding:0;margin:0;list-style:none;'
+  }, row('Quantity', item.count), row('Bulk', item.bulk), item.location === 'ground' ? null : row('Holder', ui_link(getObj('character', item.location).get('name'), `!slot5e listInventory --charId=${item.location}`)), item.desc ? row('Description', item.desc) : null, actions ? row('Actions', ...actions.map(({
+    title,
+    href
+  }) => ui_link(title, href))) : null));
+};
 // CONCATENATED MODULE: ./Slot5e/charResources.js
 
 
@@ -799,7 +1238,7 @@ class charResources_CharResources {
   }
 
   addRow(left = null, right = null) {
-    let rowId = Object(SloUtils["e" /* generateRowID */])();
+    let rowId = Object(SloUtils["g" /* generateRowID */])();
 
     const makeAttr = (suffix, curr, max) => {
       const attr = createObj('attribute', {
@@ -853,17 +1292,19 @@ class charResources_CharResources {
 // CONCATENATED MODULE: ./Slot5e/slotTracker.js
 
 
+const {
+  div: slotTracker_div,
+  span: slotTracker_span,
+  ul: slotTracker_ul,
+  li: slotTracker_li
+} = SloUtils["f" /* elements */];
 const SLOT_RESOURCE_NAME = 'Slots';
 
-const buildStatusMessage = (title, body, color = '#000') => {
-  return `<div style="background-color: #fff ; border: 1px solid ${color} ; padding: 5px ; border-radius: 5px ; overflow: hidden">` + `<div style="font-size: 14px ; font-weight: bold ; background-color: ${color}; padding: 3px ; border-top-left-radius: 3px ; border-top-right-radius: 3px">` + `<span style="color: white">` + `<div style="width: 1.7em ; vertical-align: middle ; height: 1.7em ; display: inline-block ; margin: 0 3px 0 0 ; border: 0 ; padding: 0 ; background-image: url(&quot;https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495&quot;) ; background-repeat: no-repeat ; background-size: auto 1.7em"></div>` + `${title}` + `</span>` + `</div>` + `${body}` + `</div>`;
-};
+const ENCUMBERED_MSG = name => Object(SloUtils["l" /* menuWithHeader */])(Object(SloUtils["j" /* iconHeader */])(`${name} is Encumbered`, 'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'), slotTracker_ul(slotTracker_li(`Your speed is halved`), slotTracker_li(`You have disadvantage on ability checks, attack rolls, and saving throws that use Strength, Dexterity, or Constitution`)), `#c27913`);
 
-const ENCUMBERED_MSG = name => buildStatusMessage(`${name} is Encumbered`, `<ul>` + `<li>Your speed is halved</li>` + `<li>You have disadvantage on ability checks, attack rolls, and saving throws that use Strength, Dexterity, or Constitution</li>` + `</ul>`, `#c27913`);
+const OVERLOADED_MSG = name => Object(SloUtils["l" /* menuWithHeader */])(Object(SloUtils["j" /* iconHeader */])(`${name} is Overloaded`, 'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'), `You are carrying too much! You cannot do anything until you drop some items.`, `#c22513`);
 
-const OVERLOADED_MSG = name => buildStatusMessage(`${name} is Overloaded`, `You are carrying too much! You cannot do anything until you drop some items.`, `#c22513`);
-
-const UNENCUMBERED_MSG = name => buildStatusMessage(`${name} is no longer Encumbered`, ``, `#13c24d`);
+const UNENCUMBERED_MSG = name => Object(SloUtils["l" /* menuWithHeader */])(Object(SloUtils["j" /* iconHeader */])(`${name} is no longer Encumbered`, 'https://s3.amazonaws.com/files.d20.io/images/2921607/-PQhRv3fWeAk7PLSUwYRQw/icon.png?1602013495'), ``, `#13c24d`);
 
 const parseItem = item => {
   const name = item.itemname; // item.itemproperties - The "Prop" field - ""
@@ -926,7 +1367,7 @@ class slotTracker_SlotTracker {
   setOverloaded() {
     let token = this.char.findToken();
     if (!token) return;
-    let changed = Object(SloUtils["d" /* addStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
+    let changed = Object(SloUtils["e" /* addStatus */])(token, 'Encumbered', SloUtils["d" /* StatusType */].CUSTOM);
     changed = changed || token.get('tint_color') !== '#BB3333';
     token.set('tint_color', '#BB3333');
 
@@ -942,12 +1383,14 @@ class slotTracker_SlotTracker {
     if (!token) return;
     CombatMaster.addConditionToToken(token, 'encumbered'); // TODO: Make Encumbered marker configurable
 
-    let changed = Object(SloUtils["d" /* addStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
+    let changed = Object(SloUtils["e" /* addStatus */])(token, 'Encumbered', SloUtils["d" /* StatusType */].CUSTOM);
     changed = changed || token.get('tint_color') !== 'transparent';
     token.set('tint_color', 'transparent');
 
     if (changed) {
-      sendChat('Slot5e', ENCUMBERED_MSG(this.charName), null, {
+      let msg = ENCUMBERED_MSG(this.charName);
+      log(msg);
+      sendChat('Slot5e', msg, null, {
         noarchive: true
       });
     }
@@ -956,7 +1399,7 @@ class slotTracker_SlotTracker {
   setUnencumbered() {
     let token = this.char.findToken();
     if (!token) return;
-    let changed = Object(SloUtils["g" /* removeStatus */])(token, 'Encumbered', SloUtils["c" /* StatusType */].CUSTOM);
+    let changed = Object(SloUtils["n" /* removeStatus */])(token, 'Encumbered', SloUtils["d" /* StatusType */].CUSTOM);
     token.set('tint_color', 'transparent');
 
     if (changed) {
@@ -1042,18 +1485,152 @@ function _defineProperty(obj, key, value) { if (key in obj) { Object.definePrope
 
 
 
+
+
+const {
+  span: Slot5e_span,
+  div: Slot5e_div,
+  a: Slot5e_a,
+  b: Slot5e_b,
+  ul: Slot5e_ul,
+  li: Slot5e_li
+} = SloUtils["f" /* elements */];
 const invAttrRegex = new RegExp('^([csegp]p)|repeating_inventory_([^_]*)_(itemcount|itemweight|equipped)');
 
-class Slot5e_Slot5e extends Object(SloUtils["b" /* ScriptBase */])({
+class Slot5e_Slot5e extends Object(SloUtils["c" /* ScriptBase */])({
   name: 'Slot5e',
   version: '0.3.1',
   stateKey: 'SLOT_5E',
-  initialState: {}
+  initialState: {
+    groundItems: {}
+  }
 }) {
   constructor() {
     super();
 
     _defineProperty(this, "log", msg => log(`${this.name}: ${msg}`));
+
+    _defineProperty(this, "listInventory", ({
+      charId
+    }, msg) => {
+      let char = charId ? getObj('character', charId) : this._rerunWithChar(msg, `View Inventory`);
+      if (!char) return;
+      let character = SloUtils["a" /* Character */].fromId(char.id);
+      sendChat(this.name, `/w "${Object(SloUtils["o" /* who */])(msg.who)}" ${Object(SloUtils["k" /* listMenu */])({
+        title: char.get('name'),
+        data: character.repeating.inventory,
+        renderItem: (invItem, index) => {
+          const item = getItemFromInventory(invItem.rowId, charId);
+          const actions = [{
+            icon: 'E',
+            label: 'View Item',
+            action: `!slot5e showInventoryItem --charId=${char.id} --itemId=${item.id}`
+          }, {
+            icon: 'R',
+            label: 'Drop Item',
+            action: this.getDropCommand(item, charId)
+          }];
+          return itemListRow({
+            index,
+            text: item.name,
+            actions
+          });
+        }
+      })}`);
+    });
+
+    _defineProperty(this, "pickupItem", ({
+      itemId,
+      count,
+      charId
+    }, msg) => {
+      const item = this.state.groundItems[itemId];
+
+      if (!item) {
+        throw new Error(`This item has already been picked up!`);
+      }
+
+      let char = charId ? getObj('character', charId) : this._rerunWithChar(msg, `Pick up ${item.name}`);
+      if (!char) return;
+      if (count === 'all') count = parseInt(item.count);else count = parseInt(count);
+      if (isNaN(count) || count < 1) count = 1;
+      if (count > item.count) count = item.count;
+      pickupItem(item, count, charId);
+      let originalCount = item.count;
+
+      if (count === item.count) {
+        delete this.state.groundItems[itemId];
+        item.count = 0;
+      } else {
+        item.count -= count;
+      }
+
+      if (originalCount === 1) {
+        sendChat(this.name, `${char.get('name')} picked up ${item.name}`);
+      } else {
+        sendChat(this.name, `${char.get('name')} picked up ${count} x ${item.name}`);
+      }
+
+      if (item.count) {
+        this.showGroundItem(item);
+      }
+    });
+
+    _defineProperty(this, "dropItem", ({
+      charId,
+      itemId,
+      count
+    }) => {
+      const item = getItemFromInventory(itemId, charId);
+      if (count === 'all') count = parseInt(item.count);else count = parseInt(count);
+      if (isNaN(count) || count < 1) count = 1;
+      const groundItem = dropItem(itemId, count, charId);
+      this.state.groundItems[groundItem.id] = groundItem;
+      const charName = getObj('character', charId).get('name');
+      sendChat(this.name, `${charName} dropped:`);
+      this.showGroundItem(groundItem);
+    });
+
+    _defineProperty(this, "showInventoryItem", ({
+      itemId,
+      charId
+    }, msg) => {
+      let item = getItemFromInventory(itemId, charId);
+      sendChat(this.name, `/w ${Object(SloUtils["o" /* who */])(msg.who)} ${showItemCard(item, [{
+        title: 'Drop',
+        href: this.getDropCommand(item, charId)
+      }])}`);
+    });
+
+    _defineProperty(this, "showGroundItem", item => {
+      sendChat(this.name, showItemCard(item, [{
+        title: 'Pick Up',
+        href: this.getPickupCommand(item)
+      }]));
+    });
+
+    _defineProperty(this, "_rerunWithChar", (msg, title) => {
+      let allChars = Object(SloUtils["h" /* getCharactersForPlayer */])(msg.playerid);
+
+      if (allChars.length === 0) {
+        throw new Error(`No characters found for ${msg.who}`);
+      }
+
+      if (allChars.length > 1) {
+        sendChat(this.name, `/w "${Object(SloUtils["o" /* who */])(msg.who)}" ${Object(SloUtils["l" /* menuWithHeader */])(title, Slot5e_span(Slot5e_b('Pick: '), allChars.map(c => ui_link(c.get('name'), `${msg.content} --charId=${c.id}`))))}`);
+        return null;
+      }
+
+      return allChars[0];
+    });
+
+    _defineProperty(this, "getDropCommand", (item, charId) => {
+      return `!slot5e dropItem --charId=${charId} --itemId=${item.id} --count=${item.count === 1 ? '1' : `?{Drop how many? Enter a number or &quot;all&quot; (max: ${item.count})|all}`}`;
+    });
+
+    _defineProperty(this, "getPickupCommand", item => {
+      return `!slot5e pickupItem --itemId=${item.id} --count=${item.count === 1 ? '1' : `?{Pick up how many? Enter a number or &quot;all&quot; (max: ${item.count})|all}`}`;
+    });
 
     _defineProperty(this, "onAddAttribute", attr => {
       if (attr.get('name').match(invAttrRegex)) {
@@ -1102,7 +1679,7 @@ class Slot5e_Slot5e extends Object(SloUtils["b" /* ScriptBase */])({
         this.trackers[char.id].update();
       }
     });
-    this.parser = new CommandParser('!slot5e').default(() => {
+    this.parser = new SloUtils["b" /* CommandParser */]('!slot5e').default(() => {
       let names = [];
 
       for (const id in this.trackers) {
@@ -1125,9 +1702,20 @@ class Slot5e_Slot5e extends Object(SloUtils["b" /* ScriptBase */])({
       container.class_resource = opts.slots;
       container.mancer_cancel = 'on';
       sendChat(this.name, `Created container "${name}"`);
-    });
+    }).command('listInventory', this.listInventory).command('pickupItem', this.pickupItem).command('dropItem', this.dropItem).command('showInventoryItem', this.showInventoryItem);
   }
+  /**
+   * CLI Command: Whispers a menu listing the specified container's inventory
+   * Usage:
+   * ```
+   * !slot5e listInventory --charId=123
+   * ```
+   */
 
+
+  /////////////////
+  // EVENT HANDLERS
+  /////////////////
   getTrackerForId(id) {
     if (!(id in this.trackers)) {
       this.trackers[id] = new slotTracker_SlotTracker(SloUtils["a" /* Character */].fromId(id));
